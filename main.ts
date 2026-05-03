@@ -1,269 +1,157 @@
-import { Command } from "@cliffy/command";
-import { Secret, Input } from "@cliffy/prompt";
-import { colors } from "@cliffy/ansi/colors";
-import { hasConfig, saveConfig, initializeSoul, loadConfig, initializePlaybooks } from "./config/user_prefs.ts";
-import { CodieSpinner } from "./utils/ui.ts";
-import { renderMarkdown } from "./utils/highlighter.ts";
-import { ChatMessage } from "./core/llm_client.ts";
-import { initDB, addMessage, getHistory, clearSession } from "./core/memory.ts";
+// main.ts
+import { approveTask, requestPermission } from "./core/async_permissions.ts";
 import { route } from "./core/router.ts";
+import { initDB, addMessage, getHistory } from "./core/memory.ts";
+import { loadConfig } from "./config/user_prefs.ts";
 
-if (import.meta.main) {
-  const args = Deno.args;
-  const isSetupOrHelp = args.includes("setup") || args.includes("help") || args.includes("-h") || args.includes("--help");
-  
-  if (!isSetupOrHelp) {
-    const configExists = await hasConfig();
-    if (!configExists) {
-      console.error(colors.red("Error: Codie no está configurado."));
-      console.log(colors.yellow("Por favor, ejecuta 'codie setup' primero para configurar tu API Key."));
-      Deno.exit(1);
-    }
+const WHATSAPP_VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN") || "teltronic_secreto_123";
+const PORT = parseInt(Deno.env.get("PORT") || "8000");
+
+// Inicializar la base de datos de historial de SQLite
+initDB();
+
+const handler = async (request: Request): Promise<Response> => {
+  const url = new URL(request.url);
+
+  // ==========================================
+  // 1. RUTAS DINÁMICAS (MICROFRONTENDS / APPs)
+  // ==========================================
+  if (request.method === "GET" && url.pathname.startsWith("/app/")) {
+    const sessionId = url.pathname.split("/")[2];
+    
+    // HTML temporal inyectado con Tailwind vía CDN (Reutilizaremos los de teltronic-frontend después)
+    const html = `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>CRM App - Revisión de Tarea ${sessionId}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body class="bg-slate-50 flex items-center justify-center h-screen">
+        <div class="bg-white p-8 rounded-xl shadow-lg text-center max-w-sm w-full">
+          <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-800 mb-2">Aprobación Pendiente</h1>
+          <p class="text-slate-500 mb-6">Tarea ID: <span class="font-mono text-slate-700 bg-slate-100 px-2 py-1 rounded">${sessionId}</span></p>
+          <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+            Aprobar Ejecución
+          </button>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    return new Response(html, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
   }
 
-  try {
-    await new Command()
-      .name("codie")
-      .version("2.2.0")
-      .description("Tu agente de IA local para ingeniería de software.")
-      .option("-a, --ai <profile:string>", "Sobrescribe el perfil de IA a utilizar para esta ejecución (ej. openai, openrouter, ollama)")
-      .action(async (options) => {
-         if (options.ai) {
-             const { setActiveProfile } = await import("./config/ai_profiles.ts");
-             await setActiveProfile(options.ai);
-         }
-         
-         const config = await loadConfig();
-         if (config.apiKey) {
-             Deno.env.set("OPENAI_API_KEY", config.apiKey);
-         }
-         if (config.openrouterKey) {
-             Deno.env.set("OPENROUTER_API_KEY", config.openrouterKey);
-         }
-         if (config.geminiKey) {
-             Deno.env.set("GEMINI_API_KEY", config.geminiKey);
-         }
-         if (config.claudeKey) {
-             Deno.env.set("ANTHROPIC_API_KEY", config.claudeKey);
-         }
+  // ==========================================
+  // 2. VERIFICACIÓN DE WHATSAPP META API
+  // ==========================================
+  if (request.method === "GET" && url.pathname === "/webhook") {
+    const mode = url.searchParams.get("hub.mode");
+    const token = url.searchParams.get("hub.verify_token");
+    const challenge = url.searchParams.get("hub.challenge");
 
-         await initializeSoul();
-         await initializePlaybooks();
-         initDB();
-         const sessionId = "default";
-         
-         console.log(colors.bold.green("Codie inicializado.") + colors.gray(" Comandos: 'exit' | 'clear' | '/edit' (abre VS Code para código largo)\n"));
+    if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN) {
+      console.log("✅ ¡Webhook verificado por Meta!");
+      return new Response(challenge || "", { status: 200 });
+    }
+    return new Response("Prohibido", { status: 403 });
+  }
 
-         while (true) {
-           const userInput = await Input.prompt({
-             message: colors.bold.cyan("Tú:"),
-           });
+  // ==========================================
+  // 3. RECIBIR MENSAJES DE USUARIOS (POST Webhook)
+  // ==========================================
+  if (request.method === "POST" && url.pathname === "/webhook") {
+    try {
+      const body = await request.json();
 
-           const trimmedInput = userInput.trim();
-           if (!trimmedInput) continue;
-           
-           let text = "";
+      if (body.object === "whatsapp_business_account") {
+        const entry = body.entry?.[0];
+        const changes = entry?.changes?.[0];
+        const message = changes?.value?.messages?.[0];
 
-           if (trimmedInput.toLowerCase() === "/edit" || trimmedInput.toLowerCase() === "/code") {
-             CodieSpinner.start("Abriendo editor externo...");
-             const tempPath = await Deno.makeTempFile({ suffix: ".md" });
-             await Deno.writeTextFile(tempPath, "<!-- Pega tu código masivo aquí. Guarda y cierra la pestaña/editor para enviar a Codie -->\n\n");
-             
-             let editorLaunched = false;
-             const editors = ["code", Deno.env.get("EDITOR"), "nano", "vim"].filter(Boolean) as string[];
-             
-             CodieSpinner.stop();
-             console.log(colors.gray("Esperando a que cierres el editor..."));
-             
-             for (const editor of editors) {
+        if (message && message.type === "text") {
+          const numeroUsuario = message.from;
+          const textoUsuario = message.text.body.trim();
+
+          console.log(`\n💬 Mensaje de ${numeroUsuario}: "${textoUsuario}"`);
+
+          // 3.1 INTERCEPCIÓN DE ADMINISTRADOR (Aprobaciones asíncronas de Tareas)
+          if (textoUsuario.toUpperCase().startsWith("APROBAR ")) {
+            const taskId = textoUsuario.split(" ")[1];
+            if (taskId) {
+              const task = await approveTask(taskId);
+              if (task) {
+                console.log(`✅ [HITL] Tarea ${taskId} aprobada por el Admin.`);
+                console.log(`⚙️ Ejecutando payload pendiente...`);
+                // AQUÍ: Despachar el payload al CRM Agent para que lo aplique en DB
+                
+                // Responder via WhatsApp (Mock)
+                console.log(`🤖 WhatsApp Outbound -> "Comando ejecutado exitosamente tras aprobación."`);
+              } else {
+                console.log(`❌ [HITL] Tarea ${taskId} no encontrada o ya expiró.`);
+              }
+            }
+          } 
+          // 3.2 FLUJO NORMAL: Enrutador Semántico de Jean
+          else {
+            console.log(`🤖 Enrutador analizando petición...`);
+            
+            // Usamos el número de WhatsApp como sessionId para mantener el contexto
+            const sessionId = numeroUsuario;
+            
+            // Si simulamos una petición destructiva manual:
+            if (textoUsuario.toLowerCase().includes("borrar") || textoUsuario.toLowerCase().includes("peligroso")) {
+               const taskId = await requestPermission("DB_ADMIN_AGENT", `Usuario solicitó: "${textoUsuario}"`, { action: "drop_tables" });
+               console.log(`🤖 WhatsApp Outbound -> "He pausado esta acción por seguridad. He notificado al Administrador. ID: ${taskId}"`);
+            } else {
+               // Conectar con el core/router de Jean real
                try {
-                 const args = editor === "code" ? ["--wait", tempPath] : [tempPath];
-                 const cmd = new Deno.Command(editor, { args, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
-                 const output = await cmd.output();
-                 if (output.success) {
-                   editorLaunched = true;
-                   break;
-                 }
-               } catch (_e) {
-                 // Continuar intentando con el siguiente editor
+                  const config = await loadConfig();
+                  if (config.apiKey) Deno.env.set("OPENAI_API_KEY", config.apiKey);
+                  
+                  // Agregamos el mensaje del usuario a SQLite
+                  addMessage(sessionId, { role: "user", content: textoUsuario });
+                  const history = getHistory(sessionId);
+                  
+                  // Despachamos al enrutador original
+                  const respuestaAgente = await route(textoUsuario, sessionId, history);
+                  console.log(`🤖 WhatsApp Outbound -> "${respuestaAgente}"`);
+               } catch (e) {
+                  console.log(`🤖 WhatsApp Outbound -> "Lo siento, ocurrió un error procesando tu solicitud: ${e}"`);
                }
-             }
-             
-             if (!editorLaunched) {
-               console.error(colors.red("\nError: No se pudo lanzar ningún editor (code, $EDITOR, nano, vim).\n"));
-               await Deno.remove(tempPath).catch(() => {});
-               continue;
-             }
-             
-             const rawEditorContent = await Deno.readTextFile(tempPath);
-             await Deno.remove(tempPath).catch(() => {});
-             
-             text = rawEditorContent.split("\n")
-               .filter(line => !line.startsWith("<!-- Pega tu código masivo aquí"))
-               .join("\n").trim();
-             
-             if (!text) {
-               console.log(colors.yellow("Envío cancelado (el archivo estaba vacío)."));
-               continue;
-             }
-             
-             console.log(`\n${colors.bold.cyan("Tú (vía Editor):")}\n${renderMarkdown(text)}\n`);
-           } else {
-             text = trimmedInput;
-             
-             // --- ECHO DE SEGURIDAD (FASE 6 / SHORT INPUT) ---
-             const linesCount = text.split("\n").length;
-             if (linesCount < 10) {
-               // Subimos 1 línea para borrar el prompt original de Cliffy y N líneas por el contenido
-               // (En Cliffy, el texto presionado con Enter baja 1 línea el cursor)
-               for (let i = 0; i <= linesCount; i++) {
-                 Deno.stdout.writeSync(new TextEncoder().encode('\x1B[1A\x1B[2K'));
-               }
-               // Reimprimir el texto formateado
-               console.log(`\n${colors.bold.cyan("Tú:")}\n${renderMarkdown(text)}\n`);
-             }
-             // Si es >= 10 líneas, lo dejamos crudo en la terminal por seguridad.
-           }
-           
-           if (text.toLowerCase() === "exit" || text.toLowerCase() === "quit") {
-             console.log(colors.gray("Hasta luego."));
-             break;
-           }
-           
-           if (text.toLowerCase() === "clear") {
-             clearSession(sessionId);
-             console.log(colors.yellow("Historial de la sesión borrado."));
-             continue;
-           }
-
-           const userMsg: ChatMessage = { role: "user", content: text };
-           addMessage(sessionId, userMsg);
-           
-           CodieSpinner.start("Pensando...");
-           
-           try {
-             const history = getHistory(sessionId);
-             const response = await route(text, sessionId, history);
-             
-             CodieSpinner.stop();
-             console.log(`\n${colors.bold.green("Codie:")}\n${renderMarkdown(response)}\n`);
-           } catch (err) {
-             CodieSpinner.stop();
-             console.error(colors.red(`\nError: ${err instanceof Error ? err.message : String(err)}\n`));
-           }
-         }
-      })
-      .command("setup", "Configura las preferencias iniciales y tus API Keys.")
-      .action(async () => {
-        console.log(colors.bold.blue("=== Configuración de Codie ==="));
-        
-        let existingConfig: any = null;
-        if (await hasConfig()) {
-          try {
-            existingConfig = await loadConfig();
-          } catch (e) {
-            // Ignorar error de carga para continuar con el setup limpio si está corrupto
+            }
           }
         }
+      }
 
-        const openaiMsg = existingConfig?.apiKey 
-          ? `Ingresa tu API Key de OpenAI (Enter para mantener la actual: ${existingConfig.apiKey.slice(0, 7)}***):`
-          : "Ingresa tu API Key de OpenAI (Presiona Enter para omitir):";
+      // 200 OK rápido para Meta
+      return new Response("OK", { status: 200 });
 
-        const apiKeyInput = await Secret.prompt({ message: openaiMsg });
-        const finalApiKey = apiKeyInput || existingConfig?.apiKey;
-
-        const openrouterMsg = existingConfig?.openrouterKey 
-          ? `Ingresa tu API Key de OpenRouter (Enter para mantener la actual: ${existingConfig.openrouterKey.slice(0, 7)}***):`
-          : "Ingresa tu API Key de OpenRouter (Presiona Enter para omitir):";
-
-        const openrouterInput = await Secret.prompt({ message: openrouterMsg });
-        const finalOpenrouterKey = openrouterInput || existingConfig?.openrouterKey;
-
-        const geminiMsg = existingConfig?.geminiKey 
-          ? `Ingresa tu API Key de Gemini (Enter para mantener la actual: ${existingConfig.geminiKey.slice(0, 7)}***):`
-          : "Ingresa tu API Key de Gemini (Presiona Enter para omitir):";
-
-        const geminiInput = await Secret.prompt({ message: geminiMsg });
-        const finalGeminiKey = geminiInput || existingConfig?.geminiKey;
-
-        const claudeMsg = existingConfig?.claudeKey 
-          ? `Ingresa tu API Key nativa de Claude (Enter para mantener la actual: ${existingConfig.claudeKey.slice(0, 7)}***):`
-          : "Ingresa tu API Key nativa de Claude (Presiona Enter para omitir):";
-
-        const claudeInput = await Secret.prompt({ message: claudeMsg });
-        const finalClaudeKey = claudeInput || existingConfig?.claudeKey;
-
-        const notionMsg = existingConfig?.notionApiKey
-          ? `Ingresa tu API Key de Notion (Enter para mantener la actual: ${existingConfig.notionApiKey.slice(0, 7)}***):`
-          : "Ingresa tu API Key de Notion (Opcional, Enter para saltar):";
-
-        const notionApiKeyInput = await Input.prompt({
-          message: notionMsg,
-        });
-        const finalNotionApiKey = notionApiKeyInput || existingConfig?.notionApiKey;
-
-        const gmailIdMsg = existingConfig?.gmailClientId
-          ? `Ingresa tu Google Client ID (Enter para mantener el actual: ${existingConfig.gmailClientId.slice(0, 7)}***):`
-          : "Ingresa tu Google Client ID de OAuth (Opcional, Enter para saltar):";
-
-        const gmailClientIdInput = await Input.prompt({
-          message: gmailIdMsg,
-        });
-        const finalGmailClientId = gmailClientIdInput || existingConfig?.gmailClientId;
-
-        const gmailSecretMsg = existingConfig?.gmailClientSecret
-          ? `Ingresa tu Google Client Secret (Enter para mantener el actual: ${existingConfig.gmailClientSecret.slice(0, 7)}***):`
-          : "Ingresa tu Google Client Secret de OAuth (Opcional, Enter para saltar):";
-
-        const gmailClientSecretInput = await Input.prompt({
-          message: gmailSecretMsg,
-        });
-        const finalGmailClientSecret = gmailClientSecretInput || existingConfig?.gmailClientSecret;
-
-        try {
-          await saveConfig({ 
-            apiKey: finalApiKey || undefined, 
-            openrouterKey: finalOpenrouterKey || undefined,
-            geminiKey: finalGeminiKey || undefined,
-            claudeKey: finalClaudeKey || undefined,
-            notionApiKey: finalNotionApiKey || undefined, 
-            gmailClientId: finalGmailClientId || undefined,
-            gmailClientSecret: finalGmailClientSecret || undefined
-          });
-          console.log(colors.green("\n¡Configuración guardada exitosamente en ~/.codie/config.json!"));
-          
-          // Crear profiles.json por defecto si no existe
-          const { getProfiles } = await import("./config/ai_profiles.ts");
-          await getProfiles();
-          
-        } catch (error) {
-          console.error(colors.red("\nHubo un problema al guardar la configuración."));
-          Deno.exit(1);
-        }
-      })
-      .command("learn <file> <tech_name>", "Lee un archivo local y lo memoriza en la base de datos KV de Codie.")
-      .action(async (_options, file: string, tech_name: string) => {
-        try {
-          const content = await Deno.readTextFile(file);
-          const { saveDoc } = await import("./core/knowledge_base.ts");
-          CodieSpinner.start(`Memorizando ${tech_name}...`);
-          await saveDoc(tech_name, content);
-          CodieSpinner.stop();
-          console.log(colors.green(`\n¡Éxito! El archivo '${file}' se ha memorizado bajo la tecnología '${tech_name}'.`));
-        } catch (error) {
-          CodieSpinner.stop();
-          console.error(colors.red(`\nError al aprender el archivo: ${error instanceof Error ? error.message : String(error)}`));
-          Deno.exit(1);
-        }
-      })
-      .parse(Deno.args);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("Interrupted")) {
-        console.log(colors.gray("\nSesión finalizada por el usuario."));
-        Deno.exit(0);
+    } catch (error) {
+      console.error("Error procesando el webhook:", error);
+      return new Response("Error interno", { status: 500 });
     }
-    console.error(colors.red(`Error fatal: ${error instanceof Error ? error.message : String(error)}`));
-    Deno.exit(1);
   }
+
+  // Ruta raíz fallback
+  return new Response("Jean CRM Webhook Activo. Endpoint: /webhook", { status: 200 });
+};
+
+// Cargar variables de entorno iniciales para los modelos LLM
+try {
+  const config = await loadConfig();
+  if (config.apiKey) Deno.env.set("OPENAI_API_KEY", config.apiKey);
+} catch (e) {
+  // Config no generada aún, ignorar
 }
+
+console.log(`🚀 Servidor CRM Webhook escuchando en http://localhost:${PORT}`);
+Deno.serve({ port: PORT }, handler);

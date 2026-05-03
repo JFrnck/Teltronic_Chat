@@ -1,7 +1,7 @@
 import { join } from "@std/path";
 import { exists, ensureDir } from "@std/fs";
 
-export interface CodieConfig {
+export interface JeanConfig {
   apiKey?: string;
   openrouterKey?: string;
   geminiKey?: string;
@@ -20,7 +20,7 @@ export function getConfigDir(): string {
     throw new Error("No se pudo determinar el directorio HOME del usuario.");
   }
   
-  return join(home, ".codie");
+  return join(home, ".jean");
 }
 
 export function getConfigPath(): string {
@@ -33,10 +33,11 @@ export function getSoulPath(): string {
 
 export async function initializeSoul(): Promise<void> {
   const soulPath = getSoulPath();
-  const defaultSoul = `# System Prompt de Codie
-Eres Codie, un ingeniero de software de nivel experto que asiste al usuario.
-- Debes responder siempre de forma concisa y técnica.
-- Estás autorizado a usar herramientas del sistema cuando se te solicite, pero explica brevemente qué comando ejecutarás o por qué.
+  const defaultSoul = `# System Prompt de Jean
+Eres Jean, el cerebro central del CRM empresarial de Teltronic, operado vía WhatsApp.
+- Tu misión es gestionar a los clientes, inventario y cotizaciones, respondiendo de forma asíncrona a los administradores.
+- No estás en una terminal. Te comunicas enviando interfaces (Microfrontends) y respondiendo mensajes de WhatsApp.
+- Debes ser profesional, eficiente y seguro.
 `;
   if (!(await exists(soulPath))) {
     const configDir = getConfigDir();
@@ -53,7 +54,7 @@ export async function getSoul(): Promise<string> {
   return await Deno.readTextFile(soulPath);
 }
 
-export async function saveConfig(config: CodieConfig): Promise<void> {
+export async function saveConfig(config: JeanConfig): Promise<void> {
   try {
     const configDir = getConfigDir();
     await ensureDir(configDir);
@@ -93,11 +94,11 @@ export async function initializePlaybooks() {
   }
 }
 
-export async function loadConfig(): Promise<CodieConfig> {
+export async function loadConfig(): Promise<JeanConfig> {
   try {
     const configPath = getConfigPath();
     const data = await Deno.readTextFile(configPath);
-    return JSON.parse(data) as CodieConfig;
+    return JSON.parse(data) as JeanConfig;
   } catch (error) {
     console.error("Error al leer la configuración:", error);
     throw error;

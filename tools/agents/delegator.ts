@@ -6,7 +6,7 @@ export async function delegate_task(
   input_context: string,
   ai_profile: string
 ): Promise<string> {
-  const systemPrompt = `Eres un sub-agente delegado por Codie (el Orquestador principal).
+  const systemPrompt = `Eres un sub-agente delegado por Jean (el Orquestador principal).
 Tu única función es ejecutar la siguiente tarea analítica/generativa de manera estricta:
 [TAREA]
 ${task_description}

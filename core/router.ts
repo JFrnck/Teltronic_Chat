@@ -1,13 +1,13 @@
 import { ChatMessage } from "./llm_client.ts";
-import { executeCoderTask } from "../agents/coder_agent.ts";
-import { executeProdTask } from "../agents/prod_agent.ts";
+import { executeCrmTask } from "../agents/crm_agent.ts";
+import { executeDbAdminTask } from "../agents/db_admin_agent.ts";
 import { getActiveProfile } from "../config/ai_profiles.ts";
 
 export async function route(userInput: string, sessionId: string, history: ChatMessage[]): Promise<string> {
   const profile = await getActiveProfile();
   const apiKey = Deno.env.get(profile.apiKeyEnvVar) || "";
   
-  const classificationPrompt = `Clasifica la siguiente petición del usuario. Responde ÚNICAMENTE con la palabra "PROD" si la petición involucra correos electrónicos, Gmail, Notion, productividad, bases de datos externas o gestión de tareas. Responde "CODER" si es cualquier otra cosa (código, archivos, terminal, sistema operativo, charla general).
+  const classificationPrompt = `Clasifica la siguiente petición del usuario. Responde ÚNICAMENTE con la palabra "DB" si la petición involucra administrar bases de datos, ejecutar migraciones, esquemas o comandos destructivos en Supabase. Responde "CRM" si involucra atención al cliente, inventarios o ventas.
 Petición: "${userInput}"`;
 
   try {
@@ -47,14 +47,14 @@ Petición: "${userInput}"`;
         ? (data.content && data.content[0] ? data.content[0].text.trim().toUpperCase() : "")
         : data.choices[0].message.content.trim().toUpperCase();
       
-      if (intent.includes("PROD")) {
-        return await executeProdTask(sessionId, history);
+      if (intent.includes("DB")) {
+        return await executeDbAdminTask(sessionId, history);
       }
     }
   } catch (_error) {
-    // Si falla la clasificación, asume Coder por defecto.
+    // Si falla la clasificación, asume CRM por defecto.
   }
 
   // Comportamiento predeterminado
-  return await executeCoderTask(sessionId, history);
+  return await executeCrmTask(sessionId, history);
 }

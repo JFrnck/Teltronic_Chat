@@ -1,84 +1,20 @@
-# Codie: Tu Agente Autónomo de Ingeniería de Software Local
+# Jean: CRM Empresarial para Teltronic (Vía WhatsApp)
 
-Codie es un asistente de Inteligencia Artificial ejecutable directamente desde tu terminal local. Funciona bajo una arquitectura Multi-Agente enfocada a la ingeniería de software y la productividad diaria.
+Jean es el cerebro central del CRM de Teltronic, diseñado para operar de forma 100% asíncrona a través de Webhooks de WhatsApp (Meta API). A diferencia de los CLIs tradicionales, Jean es un agente que atiende a clientes, interactúa con la base de datos (Supabase) y provee Microfrontends dinámicos bajo demanda.
 
-## Características Principales
+## Arquitectura
 
-*   **Enrutador Inteligente (Semantic Router):** Codie posee un enrutador semántico veloz. Cuando escribes tu orden, un pequeño análisis inicial (1 token) decide a qué agente despachar la tarea:
-    *   *Coder Agent:* Tiene acceso a tu sistema de archivos, puede listar, leer e interpretar código local o ejecutar comandos Bash (si lo permites).
-    *   *Prod Agent:* Gestiona tareas de productividad interactuando con integraciones externas como Notion y Gmail.
-*   **Persistencia Local en SQLite:** Todas las conversaciones, iteraciones lógicas y uso de herramientas se graban de manera persistente localmente en `~/.codie/memory.db`.
-*   **Escudo HITL (Human-In-The-Loop):** Seguridad asimétrica. El agente es capaz de leer archivos de manera silenciosa para analizar el entorno rápidamente, pero **jamás escribirá o alterará un archivo ni ejecutará comandos en la consola** sin presentar primero en la terminal una vista previa (`preview`) obligando al usuario a aceptar o declinar.
-*   **Auto-corrección Silenciosa:** Si Codie ejecuta un comando o intenta leer un archivo que resulta en error (ej. File Not Found), intercepta nativamente ese `stderr` devolviéndoselo a la propia IA para que se auto-corrija automáticamente antes de contestarte.
-*   **Alma ("Soul"):** Codie posee un sistema de configuración de "Alma" guardado en `~/.codie/soul.md`. Es un archivo markdown editable donde puedes forjar directivas maestras personalizadas para el modelo principal.
+- **Servidor Webhook (`main.ts`):** Punto de entrada principal mediante `Deno.serve`. Gestiona la verificación de Meta y recibe los mensajes entrantes de WhatsApp.
+- **Enrutador Semántico:** Decide si la petición requiere a `CRM Agent` (para clientes/ventas/inventario) o a `DB Admin Agent` (para manejo de base de datos y esquemas).
+- **Escudo Humano Asíncrono (`core/async_permissions.ts`):** Si un agente requiere ejecutar un comando destructivo o modificar el esquema de base de datos, Jean pausa la ejecución, la guarda en `Deno KV` y envía una notificación de WhatsApp al Administrador. La acción solo procede si el Admin responde `APROBAR <id>`.
+- **Microfrontends Dinámicos:** Capacidad de generar e inyectar interfaces ligeras usando HTML, Tailwind CSS y componentes base de React extraídos del CRM Frontend, para que los usuarios puedan llenar formularios o escanear códigos desde su móvil.
 
-## Novedades en V2.2.0 (UX Terminal: Syntax Highlighting & Editor Bridge)
+## Instalación y Ejecución
 
-*   **Syntax Highlighting en Terminal:** Las respuestas de Codie ahora renderizan bloques de código con colores de sintaxis reales (TypeScript, JSON, Bash, etc.) directamente en la terminal, gracias al motor `cli-highlight`. Texto en **negrita**, *itálica* y `código inline` también se formatea visualmente.
-*   **Puente a VS Code (`/edit`):** Escribe `/edit` o `/code` en el prompt para abrir VS Code con un archivo temporal. Pega código masivo, guarda y cierra la pestaña — Codie captura el contenido y lo envía a la IA. Cascada de editores resiliente: `code` → `$EDITOR` → `nano` → `vim`.
-*   **Echo Seguro del Input:** Para prompts cortos (< 10 líneas), la CLI limpia el texto crudo y lo repinta con Syntax Highlighting aplicado. Para bloques grandes, se omite la limpieza ANSI para proteger el historial de scroll de la terminal.
+Al ser un servidor Webhook, simplemente debes clonar el repositorio, configurar las variables de entorno para Deno y ejecutar el servidor en modo desarrollo:
 
-## Novedades en V2.1.0 (Memoria a Largo Plazo y Auto-Aprendizaje)
+\`\`\`bash
+deno task dev
+\`\`\`
 
-*   **Bóveda de Conocimiento (Deno KV):** Codie ahora posee memoria a largo plazo gracias a una base de datos local súper rápida (`knowledge_vault.db`). Un algoritmo de particionamiento inteligente permite almacenar documentaciones masivas superando los límites estándar de Deno KV.
-*   **Auto-Aprendizaje Seguro (Jina AI):** Cuando le pides una tecnología que no conoce, la herramienta `web_search_and_learn` navega a la web, procesa el Markdown vía Jina AI, pasa por la aduana de seguridad (HITL) y lo guarda permanentemente en su "cerebro".
-*   **Ingestión Manual vía CLI:** Nuevo subcomando global `codie learn <archivo.md> <Tecnología>`. Codie leerá, particionará y memorizará automáticamente tus archivos de configuración privados o reglas de negocio locales, inyectándolas en sus futuros prompts para siempre.
-
-## Novedades en V2.0.0 (Agent Orchestrator)
-
-*   **Aprobación Diferida (HITL Global):** Seguridad asimétrica centralizada. Codie agrupa múltiples comandos destructivos y solicita tu aprobación global en un único menú interactivo, permitiéndote modificar argumentos JSON antes de ejecutar.
-*   **Bucle ReAct (Auto-Corrección):** Capacidad de iteración y razonamiento profundo con límite de seguridad (`maxSteps`). Codie detecta fallos silenciosamente, procesa el `stderr` en memoria y usa nuevas herramientas para reparar errores sin interrumpir al usuario.
-*   **Delegación Multi-Agente:** El Orquestador inyecta un sub-agente (ej. `Gemini`, `Ollama`) vía la herramienta `delegate_task` para tareas simples, salvaguardando los créditos de modelos costosos como Claude 3.5 Sonnet. Todo contenido en cajas negras aisladas.
-*   **Despliegue CLI Global:** Puedes invocar `codie` en cualquier directorio gracias a la instalación nativa usando `deno install`.
-*   **Perfil Agnóstico Completamente Dinámico:** Soporte nativo para Claude y APIs compatibles con OpenAI.
-*   **Mega-Setup:** Configura desde la consola todas tus API keys en una bóveda segura (`~/.codie/config.json`).
-
-## Novedades en v1.1.0
-
-*   **Motor Dinámico de Playbooks:** Capacidad de crear e inyectar al vuelo reglas específicas por stack (ej. `frontend_vite_tw4.md`) usando un selector visual interactivo, manteniendo el System Prompt modular.
-*   **Web Surfer (Jina AI):** Herramienta integrada de scraping ligero (`read_documentation`) que le permite a Codie escanear cualquier URL de internet y transformarla a Markdown puro instantáneamente para asimilar documentación externa actualizada.
-*   **Orquestación en Segundo Plano:** Ahora Codie puede lanzar servidores de desarrollo (`npm run dev`), desvincularlos de su ciclo de eventos (detach mode), memorizar su PID, y apagarlos quirúrgicamente usando la API nativa de Deno.
-*   **Crash Recovery (Auto-Sanitización):** Un sistema residente que protege la integridad de tu archivo SQLite. Si interrumpes a Codie abruptamente (`Ctrl+C`), el sistema auto-podará las peticiones huérfanas en el siguiente reinicio para garantizar que OpenAI no lance errores de protocolo (Error 400).
-
-## Instalación y Configuración
-
-Puedes compilar e instalar Codie usando Deno nativamente en cualquier sistema operativo. Los binarios auto-contenidos quedarán en la carpeta `/bin` de tu directorio de trabajo.
-
-1.  Asegúrate de tener [Deno](https://deno.com/) instalado.
-2.  Clona el repositorio local.
-3.  Ejecuta el script de compilación transversal para tu sistema operativo preferido:
-    *   Mac Intel: `deno task build:mac`
-    *   Mac M1/M2/M3: `deno task build:mac-m1`
-    *   Windows: `deno task build:windows`
-    *   Linux: `deno task build:linux`
-
-### El Comando Setup
-
-Una vez que tengas el binario de Codie empaquetado (o ejecutándolo desde fuente), inicializa la bóveda usando:
-
-```bash
-codie setup
-```
-
-Esto desplegará un asistente en la consola para inyectar tus variables y credenciales en `~/.codie/config.json`.
-1. **OpenAI API Key (Obligatorio):** Permite el uso del cerebro central (`gpt-4o-mini`).
-2. **Notion API Key (Opcional):** Permite la escritura en páginas o bases de datos de Notion para el Prod Agent.
-3. **Gmail OAuth (Opcional):** Permite leer tu bandeja de correos. Exige un **Client ID** y un **Client Secret** desde Google Cloud Platform.
-
-## Guía: Cómo Configurar Google Cloud Platform (Para Gmail)
-
-El Agente de Productividad ("Prod Agent") requiere consultar correos electrónicos utilizando el protocolo OAuth 2.0 seguro. Para poder proporcionar el `Client ID` y el `Client Secret` en la fase de `codie setup`, sigue estos pasos exactos:
-
-1. Visita la [Consola de Google Cloud](https://console.cloud.google.com/).
-2. Crea un **Nuevo Proyecto** (Ej: "Codie Personal Agent").
-3. Navega hacia **APIs y Servicios** > **Biblioteca**.
-4. Busca y habilita la **Gmail API**.
-5. Ve a **APIs y Servicios** > **Pantalla de Consentimiento de OAuth**.
-   * Elige tipo de usuario **Externo** o **Interno** (Interno si tienes Google Workspace, Externo si usas cuenta pública de @gmail).
-   * Rellena el nombre de la app (Ej: "Codie Agent") y un correo de contacto de desarrollador.
-   * En "Permisos" (Scopes), añade explícitamente el permiso: `.../auth/gmail.readonly` (para garantizar lectura de seguridad sin derecho a enviar correos a tu nombre).
-   * Añade tu propio correo electrónico personal en **Usuarios de Prueba**.
-6. Ve a **APIs y Servicios** > **Credenciales**.
-7. Haz clic en **Crear Credenciales** > **ID de cliente de OAuth**.
-8. En Tipo de Aplicación elige **App de Escritorio** (Desktop App).
-9. ¡Listo! Se generará tu **Client ID** y tu **Client Secret**. Cópialos y pégalos cuando ejecutes `codie setup`.
+Asegúrate de configurar `WHATSAPP_VERIFY_TOKEN` y otras API keys en tu entorno o a través del archivo de configuración generado en `~/.jean/config.json`.
