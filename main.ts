@@ -355,19 +355,32 @@ const handler = async (request: Request): Promise<Response> => {
           
           if (task) {
             console.log(`✅ [HITL Telegram] Tarea ${taskId} aprobada.`);
-            if (task.context && task.context.action === "save_document") {
+            
+            // Retrocompatibilidad con la antigua propiedad 'context'
+            const payload: any = task.commandPayload || (task as any).context;
+            
+            if (payload && payload.action === "save_document") {
               try {
-                await moveDriveFile(task.context.fileId, task.context.newFolderId);
-                // Si hay mutación en Supabase, la ejecutamos
-                if (task.context.table) {
-                  await execute_mutation_payload(task.context);
+                await moveDriveFile(payload.fileId, payload.newFolderId);
+                if (payload.table) {
+                  await execute_mutation_payload(payload);
                 }
                 await sendTelegramMessage(chatId, "✅ Documento oficializado correctamente y movido a su carpeta final.");
               } catch (e) {
                 await sendTelegramMessage(chatId, `❌ Error al oficializar el documento: ${e}`);
               }
+            } else if (payload && payload.action) {
+              try {
+                console.log(`⚙️ Ejecutando herramienta asíncrona: ${payload.action}`);
+                const { dispatchTool } = await import("./tools/registry.ts");
+                const toolArgs = payload.payload || payload;
+                const result = await dispatchTool(payload.action, JSON.stringify(toolArgs));
+                await sendTelegramMessage(chatId, `✅ Acción ejecutada exitosamente.\n\nResultado:\n${result}`);
+              } catch (e) {
+                await sendTelegramMessage(chatId, `❌ Error crítico al ejecutar la acción: ${e}`);
+              }
             } else {
-              await sendTelegramMessage(chatId, "✅ Acción ejecutada exitosamente.");
+              await sendTelegramMessage(chatId, "✅ Acción aprobada (sin comandos ejecutables adjuntos).");
             }
           } else {
             await sendTelegramMessage(chatId, "❌ La tarea ya expiró o no existe.");
