@@ -289,11 +289,32 @@ export const prodTools = [
         type: "object",
         properties: {
           chatId: { type: "string", description: "El ID de chat (telegram_1234) o número de usuario" },
-          clientName: { type: "string", description: "Nombre del cliente" },
-          documentType: { type: "string", description: "Tipo de documento, ej: 'Cotizacion', 'Nota_de_Venta'" },
-          contentLines: { type: "array", items: { type: "string" }, description: "Líneas de texto que compondrán el cuerpo del documento" }
+          documentType: { type: "string", description: "Tipo de documento, ej: 'cotizacion', 'recibo'" },
+          datos: {
+            type: "object",
+            description: "Datos estructurados para llenar la plantilla del documento",
+            properties: {
+              cliente_nombre: { type: "string" },
+              cliente_ruc: { type: "string" },
+              vendedor: { type: "string" },
+              descuento: { type: "number" },
+              items: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    nombre: { type: "string" },
+                    cantidad: { type: "number" },
+                    precio: { type: "number" }
+                  },
+                  required: ["nombre", "cantidad", "precio"]
+                }
+              }
+            },
+            required: ["cliente_nombre", "items"]
+          }
         },
-        required: ["chatId", "clientName", "documentType", "contentLines"]
+        required: ["chatId", "documentType", "datos"]
       }
     }
   },
@@ -555,9 +576,8 @@ export async function dispatchTool(name: string, argsStr: string): Promise<strin
       case "generate_draft_document":
         return await generateDraftDocument(
           String(args.chatId).replace("telegram_", ""), 
-          args.clientName, 
           args.documentType, 
-          args.contentLines
+          args.datos
         );
       case "link_photo_to_installation": {
         try {

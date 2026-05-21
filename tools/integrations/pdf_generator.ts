@@ -1,41 +1,43 @@
-import { PDFDocument, rgb } from "npm:pdf-lib";
+import puppeteer from "npm:puppeteer";
 import { uploadFileToDrive } from "../../core/drive.ts";
 import { requestPermission } from "../../core/async_permissions.ts";
 import { sendTelegramDocument } from "../../core/telegram.ts";
 import { resolveClientFolder } from "../../core/supabase.ts";
+import { generateDocumentHtml } from "../doc_generator.ts";
 
 export async function generateDraftDocument(
   chatId: string | number,
-  clientName: string, 
   documentType: string, 
-  contentLines: string[]
+  datos: any
 ): Promise<string> {
   try {
+    const clientName = datos.cliente_nombre || "Cliente General";
+    
     // 1. Resolver el ID del Cliente en Supabase y su carpeta en Drive
     const { folderId: clientFolderId, clientId } = await resolveClientFolder(clientName);
 
-    // 2. Crear el PDF
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage();
-    const { width, height } = page.getSize();
-    
-    page.drawText(`Teltronic Solutions - ${documentType.toUpperCase()}`, {
-      x: 50,
-      y: height - 50,
-      size: 24,
-      color: rgb(0, 0.53, 0.71)
+    // 2. Generar el HTML de la plantilla
+    const htmlContent = await generateDocumentHtml(documentType.toLowerCase() === "recibo" ? "recibo" : "cotizacion", datos);
+
+    // 3. Crear el PDF con Puppeteer
+    const browser = await puppeteer.launch({
+      executablePath: Deno.env.get("PUPPETEER_EXECUTABLE_PATH") || undefined,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
-
-    page.drawText(`Cliente: ${clientName}`, { x: 50, y: height - 90, size: 14 });
-    page.drawText(`Fecha: ${new Date().toLocaleDateString()}`, { x: 50, y: height - 110, size: 14 });
-
-    let yOffset = height - 150;
-    for (const line of contentLines) {
-      page.drawText(line, { x: 50, y: yOffset, size: 12 });
-      yOffset -= 20;
-    }
-
-    const pdfBytes = await pdfDoc.save();
+    
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' }); // Esperar a que cargue Tailwind CDN
+    
+    const pdfBytesUint8Array = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '0', right: '0', bottom: '0', left: '0' }
+    });
+    
+    await browser.close();
+    
+    // Puppeteer devuelve un Uint8Array, uploadFileToDrive acepta Uint8Array
+    const pdfBytes = new Uint8Array(pdfBytesUint8Array);
 
     // 2. Subir a Drive (Carpeta temporal de Borradores o Root temporalmente)
     const fileName = `${documentType}_${clientName.replace(/\s+/g, '_')}_DRAFT.pdf`;
@@ -59,7 +61,7 @@ export async function generateDraftDocument(
     const sent = await sendTelegramDocument(
       chatId, 
       driveData.url, 
-      `📄 *Borrador Generado: ${documentType}*\nRevisa el documento en el enlace de arriba. Si está correcto, apruébalo para oficializarlo.`,
+      `📄 <b>Borrador Generado: ${documentType}</b>\nRevisa el documento en el enlace de abajo. Si está correcto, apruébalo para oficializarlo.`,
       taskId,
       `reject_${taskId}`
     );
