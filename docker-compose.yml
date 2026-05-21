@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  jean-crm:
+    build: .
+    container_name: jean-crm
+    restart: always
+    # Eliminamos el mapeo de puertos hacia el exterior (ports: - "8000:8000")
+    # Ahora solo es accesible internamente en la red de Docker para mayor seguridad
+    volumes:
+      # Mapeamos la carpeta de credenciales de Ubuntu al Root de Deno en Docker
+      - /home/ubuntu/.jean:/root/.jean
+    environment:
+      - PORT=8000
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  oracle-keepalive:
+    image: alpine:latest
+    container_name: oracle-keepalive
+    restart: always
+    command: sh -c "apk add --no-cache stress-ng && stress-ng --vm 1 --vm-bytes 15% -t 0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "1"
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - jean-crm
+    command: caddy reverse-proxy --from assistant.teltronicsolutions.com --to jean-crm:8000
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

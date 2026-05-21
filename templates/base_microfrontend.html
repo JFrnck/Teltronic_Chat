@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Teltronic CRM App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style type="text/tailwindcss">
+    @theme inline {
+      --radius-sm: calc(var(--radius) - 4px);
+      --radius-md: calc(var(--radius) - 2px);
+      --radius-lg: var(--radius);
+      --color-background: var(--background);
+      --color-foreground: var(--foreground);
+      --color-primary: var(--primary);
+      --color-primary-foreground: var(--primary-foreground);
+      --color-border: var(--border);
+    }
+
+    :root {
+      --radius: 0.625rem;
+      --background: oklch(1 0 0);
+      --foreground: oklch(0.145 0 0);
+      --primary: oklch(0.205 0 0); /* Dark slate from Teltronic UI */
+      --primary-foreground: oklch(0.985 0 0);
+      --border: oklch(0.922 0 0);
+    }
+  </style>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased h-screen flex flex-col">
+  <div id="app-root" class="flex-1 w-full max-w-md mx-auto relative h-full bg-white shadow-xl">
+    {{APP_CONTENT}}
+  </div>
+</body>
+</html>

@@ -11,16 +11,21 @@ export interface PendingTask {
 
 const KV_PATH = "./crm_knowledge.db";
 
-// Función "Mock" para simular el envío de WhatsApp a un administrador
-async function mockSendWhatsAppToAdmin(taskId: string, description: string) {
-  console.log("\n=======================================================");
-  console.log(`📱 [MOCK WHATSAPP MESSAGE TO ADMIN]`);
-  console.log(`⚠️ Solicitud de cambio bloqueada por el Escudo Humano Asíncrono:`);
-  console.log(`Descripción: "${description}"`);
-  console.log(`Para APROBAR esta tarea, responde en WhatsApp exactamente con:`);
-  console.log(`APROBAR ${taskId}`);
-  console.log(`O haz clic aquí para revisar el código en el navegador móvil: http://localhost:8000/app/${taskId}`);
-  console.log("=======================================================\n");
+import { sendWhatsAppInteractiveButton } from "./whatsapp.ts";
+
+async function notifyAdminAsync(taskId: string, description: string, adminNumber: string) {
+  console.log(`\n=======================================================`);
+  console.log(`📱 [WHATSAPP OUTBOUND] Notificando al administrador...`);
+  console.log(`=======================================================\n`);
+  
+  const baseUrl = Deno.env.get("PUBLIC_URL") || "https://assistant.teltronicsolutions.com";
+  
+  await sendWhatsAppInteractiveButton(
+    adminNumber,
+    `⚠️ *Solicitud de Aprobación*\nSe interceptó una acción que requiere tu permiso:\n\n_${description}_\n\nRevisa los detalles en: ${baseUrl}/app/${taskId}\n\n¿Deseas autorizar la ejecución?`,
+    taskId,
+    "Aprobar Acción"
+  );
 }
 
 /**
@@ -30,11 +35,11 @@ async function mockSendWhatsAppToAdmin(taskId: string, description: string) {
 export async function requestPermission(
   agent: string,
   description: string,
-  commandPayload: unknown
+  commandPayload: unknown,
+  adminNumber?: string
 ): Promise<string> {
   const kv = await Deno.openKv(KV_PATH);
   
-  // Generar un ID corto y amigable (ej. de 6 caracteres)
   const taskId = Math.random().toString(36).substring(2, 8).toUpperCase();
   
   const task: PendingTask = {
@@ -50,8 +55,13 @@ export async function requestPermission(
   await kv.set(key, task);
   kv.close();
 
-  // Enviar alerta asíncrona
-  await mockSendWhatsAppToAdmin(taskId, description);
+  // Enviar alerta asíncrona real
+  if (adminNumber) {
+    await notifyAdminAsync(taskId, description, adminNumber);
+  } else {
+    // Fallback: Si no tenemos número configurado, simulamos el log
+    console.log(`\n⚠️ [MOCK] Solicitud bloqueada. Aprobar con: APROBAR ${taskId}\n`);
+  }
 
   return taskId;
 }

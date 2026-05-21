@@ -1,6 +1,11 @@
 import { join } from "@std/path";
 import { exists, ensureDir } from "@std/fs";
 
+export interface GmailAccount {
+  email: string;
+  refreshToken: string;
+}
+
 export interface JeanConfig {
   apiKey?: string;
   openrouterKey?: string;
@@ -9,7 +14,16 @@ export interface JeanConfig {
   notionApiKey?: string;
   gmailClientId?: string;
   gmailClientSecret?: string;
-  gmailRefreshToken?: string;
+  gmailAccounts?: GmailAccount[];
+  serviceAccountPath?: string;
+  workspaceEmail?: string;
+  waPhoneNumberId?: string;
+  waAccessToken?: string;
+  waVerifyToken?: string;
+  telegramBotToken?: string;
+  telegramWhitelist?: string[]; // Chat IDs autorizados
+  supabaseUrl?: string;
+  supabaseServiceKey?: string; // Reemplaza Anon Key para bypass RLS
 }
 
 export function getConfigDir(): string {
@@ -95,11 +109,37 @@ export async function initializePlaybooks() {
 }
 
 export async function loadConfig(): Promise<JeanConfig> {
+  const configPath = getConfigPath();
   try {
-    const configPath = getConfigPath();
     const data = await Deno.readTextFile(configPath);
     return JSON.parse(data) as JeanConfig;
   } catch (error) {
+    if (error instanceof Deno.errors.NotFound) {
+      console.log(`[INIT] Configuración no encontrada. Creando archivo por defecto en ${configPath}`);
+      const configDir = getConfigDir();
+      await ensureDir(configDir);
+      
+      const defaultConfig: JeanConfig = {
+        apiKey: "",
+        openrouterKey: "",
+        geminiKey: "",
+        claudeKey: "",
+        notionApiKey: "",
+        gmailClientId: "",
+        gmailClientSecret: "",
+        gmailAccounts: [],
+        serviceAccountPath: "",
+        workspaceEmail: "",
+        telegramBotToken: "",
+        telegramWhitelist: [],
+        supabaseUrl: "",
+        supabaseServiceKey: ""
+      };
+      
+      await Deno.writeTextFile(configPath, JSON.stringify(defaultConfig, null, 2));
+      return defaultConfig;
+    }
+    
     console.error("Error al leer la configuración:", error);
     throw error;
   }

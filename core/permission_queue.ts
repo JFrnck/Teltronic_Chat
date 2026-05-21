@@ -3,7 +3,7 @@ import { colors } from "@cliffy/ansi/colors";
 import { ToolCall } from "./llm_client.ts";
 
 export async function requestUserApproval(pendingTools: ToolCall[]): Promise<boolean> {
-  console.log(`\n${colors.bold.red("⚠️  Codie ha puesto en pausa las siguientes acciones destructivas:")}`);
+  console.log(`\n${colors.bold.red("⚠️  Jean ha puesto en pausa las siguientes acciones:")}`);
   
   pendingTools.forEach((tool, index) => {
     console.log(colors.bgBlack.white(` [${index + 1}] Acción: ${tool.function.name} `));

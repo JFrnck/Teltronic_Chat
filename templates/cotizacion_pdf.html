@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{titulo_doc}} - {{numero_doc}}</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            --color-brand: #0f172a;
+            --color-light-bg: #f8fbff;
+        }
+        body {
+            background-color: #f3f4f6;
+            margin: 0;
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+        }
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm;
+            margin: 10mm auto;
+            border: 1px #D3D3D3 solid;
+            border-radius: 5px;
+            background: white;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        @media print {
+            body { background: white; margin: 0; }
+            .a4-page {
+                margin: 0; border: none; border-radius: 0; width: auto; height: auto; padding: 10mm; box-shadow: none;
+            }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="fixed bottom-6 right-6 no-print z-50">
+        <button onclick="window.print()" class="bg-brand text-white px-6 py-3 rounded-full shadow-lg font-bold hover:bg-slate-800 flex items-center gap-2 cursor-pointer transition-transform hover:scale-105">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+            Imprimir / Guardar PDF
+        </button>
+    </div>
+
+    <div class="a4-page text-[12px]">
+        <!-- ENCABEZADO -->
+        <div class="flex justify-between items-center mb-8">
+            <div class="flex items-center w-2/3">
+                <div class="w-16 h-16 bg-brand rounded flex items-center justify-center text-white font-bold text-xl mr-4 shadow">
+                    EMT
+                </div>
+                <div>
+                    <h1 class="text-[14px] font-bold text-brand mb-1">EM COMUNICATIONS TELTRONIC CAR AUDIO E.I.R.L.</h1>
+                    <p class="text-[10px] text-gray-600">OTR. SECC. S2 59 OTR. CC SUPERMARCADO LA ISLA MZA. S2 - AREQUIPA</p>
+                    <p class="text-[10px] text-gray-600">AREQUIPA - PERÚ</p>
+                </div>
+            </div>
+            
+            <div class="w-1/3 border border-brand rounded text-center bg-light-bg p-2 shadow-sm">
+                <p class="font-bold text-[13px] mb-1 text-brand">R.U.C. 20611804084</p>
+                <div class="bg-brand text-white font-bold py-1 mb-1 text-[12px] uppercase">{{titulo_doc}}</div>
+                <p class="font-bold text-[14px] text-brand">{{numero_doc}}</p>
+            </div>
+        </div>
+
+        <!-- DATOS CLIENTE -->
+        <div class="border border-gray-300 rounded p-4 mb-6 shadow-sm">
+            <div class="flex mb-1"><div class="w-24 font-bold text-gray-700">Cliente</div><div class="uppercase text-brand font-semibold">: {{cliente_nombre}}</div></div>
+            <div class="flex mb-1"><div class="w-24 font-bold text-gray-700">RUC / DNI</div><div>: {{cliente_ruc}}</div></div>
+            <div class="flex mb-1"><div class="w-24 font-bold text-gray-700">Fecha Emisión</div><div>: {{fecha}}</div></div>
+            <div class="flex"><div class="w-24 font-bold text-gray-700">Atención</div><div>: {{vendedor}}</div></div>
+        </div>
+
+        <!-- TABLA ITEMS -->
+        <div class="w-full mb-6 min-h-[100px]">
+            <div class="flex bg-brand text-white font-bold py-2 px-2 rounded-t mb-2 text-[11px]">
+                <div class="w-[10%] text-center">CANT.</div>
+                <div class="w-[12%] text-center">U.M.</div>
+                <div class="w-[48%]">DESCRIPCIÓN DEL EQUIPO / SERVICIO</div>
+                <div class="w-[15%] text-right">V. UNIT</div>
+                <div class="w-[15%] text-right pr-2">IMPORTE</div>
+            </div>
+            
+            <div class="border-x border-b border-gray-200 rounded-b">
+                {{filas_items}}
+            </div>
+        </div>
+
+        <!-- TOTALES -->
+        <div class="w-2/5 float-right mb-10 mt-4">
+            <div class="flex justify-between mb-1.5 px-2"><span class="font-bold text-gray-600">Subtotal:</span><span>S/ {{subtotal}}</span></div>
+            <div class="flex justify-between mb-1.5 px-2"><span class="font-bold text-gray-600">Descuento:</span><span>- S/ {{descuento}}</span></div>
+            <div class="flex justify-between mb-1.5 px-2 border-t border-gray-200 pt-1"><span class="font-bold text-gray-600">Base Imponible:</span><span>S/ {{base_imponible}}</span></div>
+            <div class="flex justify-between mb-2 px-2"><span class="font-bold text-gray-600">IGV (18%):</span><span>S/ {{igv}}</span></div>
+            <div class="flex justify-between mt-2 bg-brand text-white font-bold p-3 rounded shadow text-[13px]">
+                <span>TOTAL A PAGAR:</span><span>S/ {{total}}</span>
+            </div>
+        </div>
+        <div class="clear-both"></div>
+
+        <!-- FOOTER -->
+        <div class="absolute bottom-[20mm] left-[20mm] right-[20mm] border-t border-gray-300 pt-3 text-center">
+            <p class="font-bold text-[11px] mb-1 text-gray-800">CONDICIONES COMERCIALES:</p>
+            <p class="text-[9px] text-gray-500 italic mb-0.5">* Precios expresados en Soles (S/). Incluyen IGV.</p>
+            <p class="text-[9px] text-gray-500 italic mb-0.5">* Validez de la oferta: 15 días calendario o hasta agotar stock.</p>
+            <p class="text-[9px] text-gray-500 italic mb-0.5">* Garantía según fabricante. No cubre daños por mal uso o instalación externa.</p>
+            <p class="text-[10px] font-bold mt-3 text-brand uppercase tracking-wider">Teltronic Solutions - Expertos en Radiocomunicación Industrial</p>
+        </div>
+    </div>
+</body>
+</html>
