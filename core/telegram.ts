@@ -119,13 +119,14 @@ export async function sendTelegramDocument(
 
   if (!token) return false;
 
-  const url = `https://api.telegram.org/bot${token}/sendDocument`;
+  // En lugar de sendDocument (que falla con links de Google Drive), usamos sendMessage
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
   
   const payload = {
     chat_id: chatId,
-    document: documentUrl,
-    caption: caption,
+    text: `${caption}\n\n[🔗 Abrir Documento en Google Drive](${documentUrl})`,
     parse_mode: "Markdown",
+    disable_web_page_preview: true,
     reply_markup: {
       inline_keyboard: [
         [

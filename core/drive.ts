@@ -51,18 +51,33 @@ export async function uploadFileToDrive(fileName: string, mimeType: string, buff
 
   const data = await res.json();
   
-  // Opcional: Hacer el archivo público de solo lectura para poder verlo sin iniciar sesión
+  // Intentar hacer el archivo público (suele fallar en Workspace corporativos)
   await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      role: "reader",
-      type: "anyone"
-    })
+    body: JSON.stringify({ role: "reader", type: "anyone" })
   });
+
+  // Asegurar acceso al administrador configurado para evitar el error "File does not exist"
+  try {
+    const { loadConfig } = await import("../config/user_prefs.ts");
+    const config = await loadConfig();
+    if (config.workspaceEmail) {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: "reader", type: "user", emailAddress: config.workspaceEmail })
+      });
+    }
+  } catch (e) {
+    console.error("Error asignando permisos explícitos:", e);
+  }
 
   return { id: data.id, url: data.webViewLink };
 }
