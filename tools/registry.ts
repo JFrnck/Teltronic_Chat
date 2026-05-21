@@ -318,30 +318,21 @@ export const prodTools = [
     type: "function",
     safe: true,
     function: {
-      name: "add_inventory_units",
-      description: "Agrega MÚLTIPLES unidades físicas al inventario simultáneamente. ¡CRÍTICO! DEBES usar esta herramienta directamente cada vez que el usuario te pase los datos de equipos. NUNCA generes vistas de interfaz (generateView) para pedirle al usuario que llene un formulario si ya te está dando los datos. Inserta todo en el arreglo units.",
+      name: "add_inventory_unit",
+      description: "Agrega UNA sola unidad física al inventario. ¡CRÍTICO! DEBES usar esta herramienta directamente cada vez que el usuario te pase los datos de equipos. Si te envían múltiples equipos, llama a esta herramienta varias veces simultáneamente. NUNCA generes vistas de interfaz si ya tienes los datos.",
       parameters: {
         type: "object",
         properties: {
-          units: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                brandName: { type: "string", description: "Marca (ej. MOTOROLA)" },
-                categoryName: { type: "string", description: "Categoría (ej. RADIO PORTATIL)" },
-                modelName: { type: "string", description: "Modelo (ej. DEP450 VHF)" },
-                serialNumber: { type: "string", description: "Número de serie único de esta unidad" },
-                buyPrice: { type: "number", description: "Precio de compra" },
-                sellPrice: { type: "number", description: "Precio de venta al público" },
-                condition: { type: "string", description: "Estado de la unidad (ej. NUEVA, USADA)" },
-                comments: { type: "string", description: "Comentarios adicionales" }
-              },
-              required: ["brandName", "categoryName", "modelName", "serialNumber", "buyPrice", "sellPrice"]
-            }
-          }
+          brandName: { type: "string", description: "Marca (ej. MOTOROLA)" },
+          categoryName: { type: "string", description: "Categoría (ej. RADIO PORTATIL)" },
+          modelName: { type: "string", description: "Modelo (ej. DEP450 VHF)" },
+          serialNumber: { type: "string", description: "Número de serie único de esta unidad" },
+          buyPrice: { type: "number", description: "Precio de compra" },
+          sellPrice: { type: "number", description: "Precio de venta al público" },
+          condition: { type: "string", description: "Estado de la unidad (ej. NUEVA, USADA)" },
+          comments: { type: "string", description: "Comentarios adicionales" }
         },
-        required: ["units"]
+        required: ["brandName", "categoryName", "modelName", "serialNumber", "buyPrice", "sellPrice"]
       }
     }
   },
@@ -357,7 +348,8 @@ export const prodTools = [
           brand: { type: "string", description: "Marca a filtrar (opcional)" },
           model: { type: "string", description: "Modelo a filtrar (opcional)" },
           status: { type: "string", description: "Estado de disponibilidad, ej. 'En Almacén' (opcional)" }
-        }
+        },
+        required: []
       }
     }
   },
@@ -632,43 +624,29 @@ export async function dispatchTool(name: string, argsStr: string): Promise<strin
           return `Error al consultar calendario: ${e}`;
         }
       }
-      case "add_inventory_units": {
+      case "add_inventory_unit": {
         try {
           const supabase = await getSupabaseClient();
-          const units = args.units || [];
-          let successCount = 0;
-          let errorMessages = [];
+          const unit = args;
+          
+          const { brandId, categoryId } = await resolveBrandAndCategory(unit.brandName, unit.categoryName);
+          const catalogId = await resolveCatalogModel(brandId, categoryId, unit.brandName, unit.modelName);
+          
+          const { error } = await supabase.from("unidades_inventario").insert({
+            catalogo_id: catalogId,
+            numero_serie: unit.serialNumber,
+            precio_compra: unit.buyPrice,
+            precio_venta: unit.sellPrice,
+            condicion: unit.condition || "Nuevo",
+            comentarios: unit.comments || ""
+          });
 
-          for (const unit of units) {
-            try {
-              const { brandId, categoryId } = await resolveBrandAndCategory(unit.brandName, unit.categoryName);
-              const catalogId = await resolveCatalogModel(brandId, categoryId, unit.brandName, unit.modelName);
-              
-              const { error } = await supabase.from("unidades_inventario").insert({
-                catalogo_id: catalogId,
-                numero_serie: unit.serialNumber,
-                precio_compra: unit.buyPrice,
-                precio_venta: unit.sellPrice,
-                condicion: unit.condition || "Nuevo",
-                comentarios: unit.comments || ""
-              });
-
-              if (error) {
-                errorMessages.push(`Serie ${unit.serialNumber}: ${error.message}`);
-              } else {
-                successCount++;
-              }
-            } catch (innerErr) {
-              errorMessages.push(`Serie ${unit.serialNumber}: ${innerErr.message}`);
-            }
+          if (error) {
+            return `Error al insertar serie ${unit.serialNumber}: ${error.message}`;
           }
-
-          if (errorMessages.length > 0) {
-            return `Se ingresaron ${successCount} unidades correctamente, pero hubo errores en ${errorMessages.length}:\n${errorMessages.join("\n")}`;
-          }
-          return `✅ Todas las ${successCount} unidades fueron ingresadas correctamente al inventario.`;
+          return `Unidad ${unit.serialNumber} registrada exitosamente.`;
         } catch (e) {
-          return `Error general en el ingreso masivo: ${e}`;
+          return `Error al agregar unidad de inventario: ${e}`;
         }
       }
       case "search_inventory": {
