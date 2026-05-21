@@ -56,7 +56,14 @@ export async function chat(
       temperature: 0.7
     };
     if (tools && tools.length > 0) {
-      payload.tools = tools;
+      payload.tools = tools.map((t: any) => ({
+        type: t.type,
+        function: {
+          name: t.function.name,
+          description: t.function.description,
+          parameters: t.function.parameters
+        }
+      }));
       payload.tool_choice = "auto";
     }
     headers["Authorization"] = `Bearer ${apiKey}`;
