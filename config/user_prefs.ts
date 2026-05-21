@@ -112,7 +112,19 @@ export async function loadConfig(): Promise<JeanConfig> {
   const configPath = getConfigPath();
   try {
     const data = await Deno.readTextFile(configPath);
-    return JSON.parse(data) as JeanConfig;
+    const config = JSON.parse(data) as JeanConfig;
+    
+    // Parche dinámico para portabilidad (Mac -> Docker)
+    if (config.serviceAccountPath) {
+      const currentHome = getConfigDir();
+      if (!config.serviceAccountPath.startsWith(currentHome)) {
+        // Extraer el nombre del archivo y apuntarlo al directorio actual
+        const fileName = config.serviceAccountPath.split('/').pop() || "service_account.json";
+        config.serviceAccountPath = join(currentHome, fileName);
+      }
+    }
+    
+    return config;
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) {
       console.log(`[INIT] Configuración no encontrada. Creando archivo por defecto en ${configPath}`);
