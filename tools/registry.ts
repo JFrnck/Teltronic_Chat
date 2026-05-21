@@ -316,7 +316,7 @@ export const prodTools = [
   },
   {
     type: "function",
-    safe: false,
+    safe: true,
     function: {
       name: "add_inventory_units",
       description: "Agrega MÚLTIPLES unidades físicas al inventario simultáneamente. ¡CRÍTICO! DEBES usar esta herramienta directamente cada vez que el usuario te pase los datos de equipos. NUNCA generes vistas de interfaz (generateView) para pedirle al usuario que llene un formulario si ya te está dando los datos. Inserta todo en el arreglo units.",
