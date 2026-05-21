@@ -259,8 +259,8 @@ const handler = async (request: Request): Promise<Response> => {
                  console.log(`⚙️ Ejecutando payload pendiente...`);
                  
                  // Aplicar el cambio real en la Base de Datos si es una tarea de Supabase nativa
-                 if (task.context && task.context.action && task.context.table) {
-                    const success = await execute_mutation_payload(task.context);
+                 if (task.context && task.context.action === "mutate_database") {
+                    const success = await execute_mutation_payload(task.context.payload || task.context);
                     if (success) {
                        await sendWhatsAppMessage(numeroUsuario, "✅ Mutación en base de datos ejecutada exitosamente tras tu aprobación.");
                     } else {
@@ -380,7 +380,7 @@ const handler = async (request: Request): Promise<Response> => {
               } catch (e) {
                 await sendTelegramMessage(chatId, `❌ Error crítico enviando el correo: ${e}`);
               }
-            } else if (payload && payload.table) {
+            } else if (payload && payload.action === "mutate_database") {
               try {
                 const success = await execute_mutation_payload(payload.payload || payload);
                 if (success) {
