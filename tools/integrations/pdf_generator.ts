@@ -65,9 +65,9 @@ export async function generateDraftDocument(
     );
 
     if (sent) {
-      return `[SYSTEM] El borrador del documento ha sido generado y enviado al usuario por Telegram para su revisión (ID Tarea: ${taskId}). Tu ejecución termina aquí.`;
+      return `[SYSTEM] El borrador del documento ha sido generado y enviado al usuario por Telegram para su revisión (ID Tarea: ${taskId}). Dile al usuario que revise el mensaje interactivo que acaba de recibir y que lo apruebe para oficializarlo.`;
     } else {
-      return `[SYSTEM] El borrador se subió a Drive en ${driveData.url}, pero hubo un fallo al enviarlo por Telegram.`;
+      return `[SYSTEM] El borrador se subió a Drive en ${driveData.url}, pero hubo un fallo al enviarlo por Telegram. Dile al usuario que hubo un error y entrégale el link directamente.`;
     }
   } catch (error) {
     return `Error generando el borrador PDF: ${error}`;

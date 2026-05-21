@@ -554,7 +554,7 @@ export async function dispatchTool(name: string, argsStr: string): Promise<strin
         return await moveDriveFile(args.fileId, args.newParentFolderId);
       case "generate_draft_document":
         return await generateDraftDocument(
-          args.chatId.replace("telegram_", ""), 
+          String(args.chatId).replace("telegram_", ""), 
           args.clientName, 
           args.documentType, 
           args.contentLines
