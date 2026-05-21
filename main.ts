@@ -369,15 +369,27 @@ const handler = async (request: Request): Promise<Response> => {
               } catch (e) {
                 await sendTelegramMessage(chatId, `❌ Error al oficializar el documento: ${e}`);
               }
-            } else if (payload && payload.action) {
+            } else if (payload && payload.action === "send_email") {
               try {
-                console.log(`⚙️ Ejecutando herramienta asíncrona: ${payload.action}`);
-                const { dispatchTool } = await import("./tools/registry.ts");
-                const toolArgs = payload.payload || payload;
-                const result = await dispatchTool(payload.action, JSON.stringify(toolArgs));
-                await sendTelegramMessage(chatId, `✅ Acción ejecutada exitosamente.\n\nResultado:\n${result}`);
+                const success = await execute_send_email_payload(payload.payload || payload);
+                if (success) {
+                  await sendTelegramMessage(chatId, "✅ Correo electrónico enviado exitosamente tras tu aprobación.");
+                } else {
+                  await sendTelegramMessage(chatId, "❌ La tarea fue aprobada pero ocurrió un error al enviar el correo vía Gmail.");
+                }
               } catch (e) {
-                await sendTelegramMessage(chatId, `❌ Error crítico al ejecutar la acción: ${e}`);
+                await sendTelegramMessage(chatId, `❌ Error crítico enviando el correo: ${e}`);
+              }
+            } else if (payload && payload.table) {
+              try {
+                const success = await execute_mutation_payload(payload.payload || payload);
+                if (success) {
+                   await sendTelegramMessage(chatId, "✅ Mutación en base de datos ejecutada exitosamente tras tu aprobación.");
+                } else {
+                   await sendTelegramMessage(chatId, "❌ La tarea fue aprobada pero ocurrió un error al inyectar los datos a Supabase.");
+                }
+              } catch (e) {
+                await sendTelegramMessage(chatId, `❌ Error en Supabase: ${e}`);
               }
             } else {
               await sendTelegramMessage(chatId, "✅ Acción aprobada (sin comandos ejecutables adjuntos).");
