@@ -184,7 +184,31 @@ export async function sendTelegramInteractiveButton(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return response.ok;
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      if (errorData.includes("can't parse entities")) {
+        console.warn("⚠️ Telegram Markdown Error en botón interactivo. Reintentando como texto plano puro...");
+        delete (payload as any).parse_mode;
+        
+        const fallbackResponse = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!fallbackResponse.ok) {
+           console.error(`❌ Error definitivo en botón de Telegram:`, await fallbackResponse.text());
+           return false;
+        }
+        return true;
+      }
+      
+      console.error(`❌ Error en botón de Telegram (${response.status}):`, errorData);
+      return false;
+    }
+    
+    return true;
   } catch (error) {
     console.error("Error enviando botones por Telegram:", error);
     return false;
