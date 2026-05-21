@@ -98,13 +98,20 @@ export async function getValidAccessToken(email: string): Promise<string> {
   const config = await loadConfig();
 
   // 1. Verificar si es el correo corporativo usando Service Account
-  if (config.workspaceEmail && email === config.workspaceEmail && config.serviceAccountPath) {
+  // También añadimos flexibilidad: si el LLM inventa un alias (ej. corporativa@teltronic.com) 
+  // que no está en las cuentas personales, forzamos el uso del workspaceEmail real.
+  const isWorkspace = config.workspaceEmail && config.serviceAccountPath && 
+                     (email === config.workspaceEmail || 
+                     (!config.gmailAccounts?.find(a => a.email === email) && email.includes("@")));
+
+  if (isWorkspace) {
+    const targetEmail = config.workspaceEmail!;
     try {
       const auth = new GoogleAuth({
         keyFile: config.serviceAccountPath,
         scopes: [SCOPE],
         clientOptions: {
-          subject: config.workspaceEmail
+          subject: targetEmail
         }
       });
       const client = await auth.getClient();
@@ -112,7 +119,7 @@ export async function getValidAccessToken(email: string): Promise<string> {
       if (token && token.token) return token.token;
       throw new Error("No se pudo obtener el token de Service Account");
     } catch (e) {
-      throw new Error(`Fallo autenticando Service Account para ${email}: ${e}`);
+      throw new Error(`Fallo autenticando Service Account para ${targetEmail}: ${e}`);
     }
   }
 
