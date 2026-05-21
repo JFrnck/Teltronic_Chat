@@ -12,20 +12,31 @@ export interface PendingTask {
 const KV_PATH = "./crm_knowledge.db";
 
 import { sendWhatsAppInteractiveButton } from "./whatsapp.ts";
+import { sendTelegramInteractiveButton } from "./telegram.ts";
 
 async function notifyAdminAsync(taskId: string, description: string, adminNumber: string) {
   console.log(`\n=======================================================`);
-  console.log(`📱 [WHATSAPP OUTBOUND] Notificando al administrador...`);
+  console.log(`📱 [OUTBOUND] Notificando al administrador...`);
   console.log(`=======================================================\n`);
   
   const baseUrl = Deno.env.get("PUBLIC_URL") || "https://assistant.teltronicsolutions.com";
   
-  await sendWhatsAppInteractiveButton(
-    adminNumber,
-    `⚠️ *Solicitud de Aprobación*\nSe interceptó una acción que requiere tu permiso:\n\n_${description}_\n\nRevisa los detalles en: ${baseUrl}/app/${taskId}\n\n¿Deseas autorizar la ejecución?`,
-    taskId,
-    "Aprobar Acción"
-  );
+  if (adminNumber.startsWith("telegram_")) {
+    const chatId = adminNumber.replace("telegram_", "");
+    await sendTelegramInteractiveButton(
+      chatId,
+      `⚠️ *Solicitud de Aprobación*\nSe interceptó una acción que requiere tu permiso:\n\n_${description}_\n\nRevisa los detalles en: ${baseUrl}/app/${taskId}\n\n¿Deseas autorizar la ejecución?`,
+      taskId,
+      "✅ Aprobar Acción"
+    );
+  } else {
+    await sendWhatsAppInteractiveButton(
+      adminNumber,
+      `⚠️ *Solicitud de Aprobación*\nSe interceptó una acción que requiere tu permiso:\n\n_${description}_\n\nRevisa los detalles en: ${baseUrl}/app/${taskId}\n\n¿Deseas autorizar la ejecución?`,
+      taskId,
+      "Aprobar Acción"
+    );
+  }
 }
 
 /**

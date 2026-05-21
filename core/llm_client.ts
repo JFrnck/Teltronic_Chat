@@ -126,22 +126,37 @@ export async function chat(
     // 2. Interceptar y solicitar aprobación para herramientas inseguras
     if (unsafeTools.length > 0) {
       CodieSpinner.stop();
-      const { requestUserApproval } = await import("./permission_queue.ts");
-      const isApproved = await requestUserApproval(unsafeTools);
       
-      if (isApproved) {
-        for (const toolCall of unsafeTools) {
-          try {
-            // Nota: Los argumentos pueden haber sido mutados por el usuario en el queue
-            const result = await dispatchTool(toolCall.function.name, toolCall.function.arguments);
-            resultsMap.set(toolCall.id, result);
-          } catch (err) {
-            resultsMap.set(toolCall.id, `Error crítico de ejecución: ${err instanceof Error ? err.message : String(err)}`);
+      const isCli = sessionId === "CLI" || sessionId === "local";
+      
+      if (isCli) {
+        const { requestUserApproval } = await import("./permission_queue.ts");
+        const isApproved = await requestUserApproval(unsafeTools);
+        
+        if (isApproved) {
+          for (const toolCall of unsafeTools) {
+            try {
+              const result = await dispatchTool(toolCall.function.name, toolCall.function.arguments);
+              resultsMap.set(toolCall.id, result);
+            } catch (err) {
+              resultsMap.set(toolCall.id, `Error crítico de ejecución: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+        } else {
+          for (const toolCall of unsafeTools) {
+            resultsMap.set(toolCall.id, "El usuario ha denegado el permiso para ejecutar esta acción.");
           }
         }
       } else {
+        // Modo Webhook (Telegram/WhatsApp)
+        const { requestPermission } = await import("./async_permissions.ts");
         for (const toolCall of unsafeTools) {
-          resultsMap.set(toolCall.id, "El usuario ha denegado el permiso para ejecutar esta acción. Por favor revisa si quieres proponer otra herramienta.");
+          try {
+            const taskId = await requestPermission("CRM_AGENT", `Ejecutar herramienta: ${toolCall.function.name}`, { action: toolCall.function.name, payload: JSON.parse(toolCall.function.arguments) }, sessionId);
+            resultsMap.set(toolCall.id, `¡ATENCIÓN! La tarea '${toolCall.function.name}' fue bloqueada por seguridad. Se ha enviado una solicitud interactiva al administrador (ID: ${taskId}). Dile al usuario que revise sus mensajes y apruebe la acción mediante el botón interactivo que acaba de recibir.`);
+          } catch (e) {
+            resultsMap.set(toolCall.id, `Error solicitando permiso asíncrono: ${e}`);
+          }
         }
       }
       CodieSpinner.start("Re-analizando resultados...");
