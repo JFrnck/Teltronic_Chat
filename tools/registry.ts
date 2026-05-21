@@ -281,7 +281,7 @@ export const prodTools = [
   },
   {
     type: "function",
-    safe: false,
+    safe: true,
     function: {
       name: "generate_draft_document",
       description: "Genera un borrador de un PDF (Cotización, Nota de Venta) y lo envía al usuario por Telegram para su revisión y aprobación. Usa esto cuando el usuario te pida crear un documento.",

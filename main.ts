@@ -269,16 +269,27 @@ const handler = async (request: Request): Promise<Response> => {
                  } 
                  // Aplicar envío de correo si es una tarea de Gmail
                  else if (task.context && task.context.action === "send_email") {
-                    const success = await execute_send_email_payload(task.context);
+                    const success = await execute_send_email_payload(task.context.payload || task.context);
                     if (success) {
                        await sendWhatsAppMessage(numeroUsuario, "✅ Correo electrónico enviado exitosamente tras tu aprobación.");
                     } else {
                        await sendWhatsAppMessage(numeroUsuario, "❌ La tarea fue aprobada pero ocurrió un error al enviar el correo vía Gmail.");
                     }
                  }
+                 else if (task.context && task.context.action) {
+                    try {
+                       console.log(`⚙️ Ejecutando herramienta asíncrona genérica: ${task.context.action}`);
+                       const { dispatchTool } = await import("./tools/registry.ts");
+                       const toolArgs = task.context.payload || task.context;
+                       const result = await dispatchTool(task.context.action, JSON.stringify(toolArgs));
+                       await sendWhatsAppMessage(numeroUsuario, `✅ Acción ejecutada exitosamente.\n\nResultado:\n${result}`);
+                    } catch (e) {
+                       await sendWhatsAppMessage(numeroUsuario, `❌ Error crítico al ejecutar la acción: ${e}`);
+                    }
+                 }
                  else {
-                    // Otras tareas pendientes
-                    await sendWhatsAppMessage(numeroUsuario, "✅ Comando ejecutado exitosamente tras tu aprobación.");
+                    // Otras tareas pendientes sin comandos
+                    await sendWhatsAppMessage(numeroUsuario, "✅ Acción aprobada (sin comandos ejecutables adjuntos).");
                  }
               } else {
                  await sendWhatsAppMessage(numeroUsuario, "❌ Tarea no encontrada o ya expiró.");
@@ -390,6 +401,16 @@ const handler = async (request: Request): Promise<Response> => {
                 }
               } catch (e) {
                 await sendTelegramMessage(chatId, `❌ Error en Supabase: ${e}`);
+              }
+            } else if (payload && payload.action) {
+              try {
+                console.log(`⚙️ Ejecutando herramienta asíncrona genérica: ${payload.action}`);
+                const { dispatchTool } = await import("./tools/registry.ts");
+                const toolArgs = payload.payload || payload;
+                const result = await dispatchTool(payload.action, JSON.stringify(toolArgs));
+                await sendTelegramMessage(chatId, `✅ Acción ejecutada exitosamente.\n\nResultado:\n${result}`);
+              } catch (e) {
+                await sendTelegramMessage(chatId, `❌ Error crítico al ejecutar la acción: ${e}`);
               }
             } else {
               await sendTelegramMessage(chatId, "✅ Acción aprobada (sin comandos ejecutables adjuntos).");
